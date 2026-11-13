@@ -558,7 +558,7 @@ function createTab({ sessionId, cwd, key, title, isNew }) {
     api.write(termId, d);
   });
   term.onTitleChange(title => setBusy(tab, BUSY_TITLE.test(title || '')));
-  term.onResize(({ cols, rows }) => { if (tab.alive) api.resize(termId, cols, rows); });
+  term.onResize(({ cols, rows }) => { if (tab.alive) sendPtySize(tab, cols, rows); });
   term._core.onRender(() => { if (tab.placeIme) tab.placeIme(); });
   setupImeAnchor(tab);
   setupFileLinks(tab);
@@ -655,6 +655,7 @@ function setupImeAnchor(tab) {
 
 async function launch(tab) {
   const { cols, rows } = tab.term;
+  tab.ptySize = { cols, rows }; // pty 以这个尺寸启动
   tab.alive = true;
   tab.busy = false;
   tab.done = false;
@@ -805,7 +806,14 @@ async function pickFolderAndStart() {
 
 api.onData((id, data) => {
   const t = tabs.get(id);
-  if (t) t.term.write(data);
+  if (!t) return;
+  // ConPTY 的重画以"光标回左上角"(CSI H) 开头；写完这一块再切到新尺寸
+  if (t.pendingRepaint && data.includes('[H')) {
+    t.pendingRepaint = false;
+    t.term.write(data, () => applyPendingSize(t));
+    return;
+  }
+  t.term.write(data);
 });
 api.onExit((id, code) => {
   const t = tabs.get(id);
@@ -839,8 +847,35 @@ function fitTab(t) {
   const availH = Math.max(0, t.wrap.clientHeight - padY);
   const cols = Math.max(2, Math.floor(availW / rawCellW));
   const rows = Math.max(1, Math.floor(availH / cellH));
-  if (cols !== t.term.cols || rows !== t.term.rows) { t.term.resize(cols, rows); return true; }
-  return false;
+  const cur = t.pendingSize || { cols: t.term.cols, rows: t.term.rows };
+  if (cols === cur.cols && rows === cur.rows) return false;
+  resizeTab(t, cols, rows);
+  return true;
+}
+
+// 改终端尺寸：先通知 ConPTY，等它那一帧"按旧尺寸重画"写进 xterm 之后，再改 xterm 的尺寸。
+// Windows 的 ConPTY 收到 resize 后会先按旧宽度把整屏重画一遍（约 10ms 后），过几十毫秒才按新宽度
+// 再画一遍。如果 xterm 先变窄，旧宽度的那一帧会在 xterm 里折行、把屏幕往上顶，顶出去的内容就成了
+// 滚动区里的残影（同一段内容出现两次、半截的旧画面）。顺序对了就没有这个问题。
+const RESIZE_SETTLE_MS = 120;
+function resizeTab(t, cols, rows) {
+  if (!t.alive) { t.pendingSize = null; t.term.resize(cols, rows); return; }
+  t.pendingSize = { cols, rows };
+  t.pendingRepaint = true; // 等 ConPTY 的第一帧重画
+  sendPtySize(t, cols, rows);
+  clearTimeout(t.pendingTimer);
+  t.pendingTimer = setTimeout(() => applyPendingSize(t), RESIZE_SETTLE_MS);
+}
+function applyPendingSize(t) {
+  clearTimeout(t.pendingTimer);
+  const p = t.pendingSize;
+  t.pendingSize = null; t.pendingRepaint = false;
+  if (p && (p.cols !== t.term.cols || p.rows !== t.term.rows)) t.term.resize(p.cols, p.rows);
+}
+function sendPtySize(t, cols, rows) {
+  if (t.ptySize && t.ptySize.cols === cols && t.ptySize.rows === rows) return;
+  t.ptySize = { cols, rows };
+  api.resize(t.termId, cols, rows);
 }
 new ResizeObserver(() => {
   const t = tabs.get(activeId);
