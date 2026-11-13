@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- CLI-desk logo：终端方块 + 提示符 ">"，光标位置换成陶土色八芒星 -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a3936"/>
+      <stop offset="1" stop-color="#1f1e1d"/>
+    </linearGradient>
+    <!-- 水平/垂直的芒线包围盒宽或高为 0，必须用绝对坐标，否则渐变画不出来 -->
+    <linearGradient id="spark" gradientUnits="userSpaceOnUse" x1="-76" y1="-76" x2="76" y2="76">
+      <stop offset="0" stop-color="#e5896a"/>
+      <stop offset="1" stop-color="#c96442"/>
+    </linearGradient>
+  </defs>
+  <!-- 终端方块 -->
+  <rect x="24" y="24" width="464" height="464" rx="112" fill="url(#tile)"/>
+  <rect x="25.5" y="25.5" width="461" height="461" rx="110.5" fill="none" stroke="#ffffff" stroke-opacity="0.08" stroke-width="3"/>
+  <!-- 提示符 > -->
+  <path d="M98 172 L192 256 L98 340" fill="none" stroke="#faf9f5" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- 光标：八芒星（长短芒交替） -->
+  <g transform="translate(348 290)" stroke="url(#spark)" stroke-width="32" stroke-linecap="round">
+    <path d="M0 0 L0 -76"/>
+    <path d="M0 0 L0 76"/>
+    <path d="M0 0 L-76 0"/>
+    <path d="M0 0 L76 0"/>
+    <path d="M0 0 L-42 -42"/>
+    <path d="M0 0 L42 -42"/>
+    <path d="M0 0 L-42 42"/>
+    <path d="M0 0 L42 42"/>
+  </g>
+</svg>
